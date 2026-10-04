@@ -1748,7 +1748,7 @@ async function iniciarConversacion(){
   if (!CONFIG.agente){ subtitular('Este humano digital todavía no tiene agente de voz.', 'Probá «Escucharlo sin conectarse», o cargá el ID del agente en el Creador.'); return; }
   try { speechSynthesis.cancel(); } catch {} estado.demoHasta = 0; cortarLinea();
   ponerModo('conectando'); ui.hablar.disabled = true;
-  try { await navigator.mediaDevices.getUserMedia({ audio:true }); }
+  try { const prueba = await navigator.mediaDevices.getUserMedia({ audio:true }); prueba.getTracks().forEach(t => t.stop()); } // se suelta: el SDK abre el suyo
   catch { ponerModo('inactivo'); ui.hablar.disabled = false; subtitular('Para conversar hace falta el micrófono.', 'Permitilo en el candado de la barra de direcciones y volvé a tocar «Hablar».'); return; }
   try {
     const { Conversation } = await cargarSDK();
@@ -1756,7 +1756,14 @@ async function iniciarConversacion(){
       agentId: CONFIG.agente,
       connectionType: 'websocket',
       onConnect: () => { ponerModo('listening'); ui.hablar.setAttribute('aria-pressed', 'true'); ui.hablar.textContent = 'Terminar'; },
-      onDisconnect: () => terminarUI(),
+      onDisconnect: (d) => {
+        const motivo = String(d?.closeReason || d?.message || '');
+        const porUsuario = d?.reason === 'user';
+        terminarUI();
+        if (porUsuario) return;
+        if (/guardrail/i.test(motivo)) subtitular(`${PERSONA.corto} cortó la charla por una regla de seguridad.`, 'Tocá «Hablar» para empezar de nuevo.');
+        else subtitular(`Se terminó la charla con ${PERSONA.corto}.`, 'Tocá «Hablar» para seguir conversando.');
+      },
       onError: (e) => { console.error(e); subtitular(`La conexión con ${PERSONA.corto} se cortó.`, 'Revisá tu internet y volvé a tocar «Hablar».'); },
       onModeChange: ({ mode }) => ponerModo(mode === 'speaking' ? 'speaking' : 'listening'),
       onConversationMetadata: (m) => { if (m?.agent_output_audio_format) linea.formato = m.agent_output_audio_format; },
